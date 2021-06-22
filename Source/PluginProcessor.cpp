@@ -9,7 +9,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-
 //==============================================================================
 DigitalDelayAudioProcessor::DigitalDelayAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -29,16 +28,16 @@ DigitalDelayAudioProcessor::DigitalDelayAudioProcessor()
     tree.addParameterListener(getFeedbackParamName(), this);
     tree.addParameterListener(getPanParamName(), this);
     tree.addParameterListener(getDryWetParamName(), this);
-    tree.addParameterListener(getMsecParamName(), this); //may not need this
-    tree.addParameterListener(getStepsParamName(), this);
-    tree.state.setProperty(getStepsParamName(), steps, nullptr);
     delayBuffer.clear();
     dryBuffer.clear();
     convertStepsToMsec();
+
+    buttonIDs = { juce::String("Milliseconds"), juce::String("Steps"), juce::String("EighthTriplet"), juce::String("Sixteenth") };
 }
 
 DigitalDelayAudioProcessor::~DigitalDelayAudioProcessor()
 {
+    
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout DigitalDelayAudioProcessor::createParameterLayout()
@@ -68,22 +67,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout DigitalDelayAudioProcessor::
                          : juce::String(-100 * param,1) + "% L"; });
     params.push_back(std::move(panParam));
 
-    auto msecParam     = std::make_unique<juce::AudioParameterInt>(getMsecParamName(),
-                         getMsecParamName(), 1, 2000, 1, juce::String(),
-                         [](int param, int) {return juce::String(param); });
-    params.push_back(std::move(msecParam));
-    
-    auto stepsParam    = std::make_unique<juce::AudioParameterInt>(getStepsParamName(),
-                         getStepsParamName(), 1, 16, 1, juce::String(),
-                         [](int param, int) {return juce::String(param); });
-    params.push_back(std::move(stepsParam));
-
     return { params.begin(), params.end() };
 
 }
 
 void DigitalDelayAudioProcessor::parameterChanged(const juce::String& parameter, float newValue)
 {
+    DBG("param changed");
+    bool boolVal = static_cast<bool> (newValue);
     if (parameter == getFeedbackParamName())
     {
         feedback = std::sqrt(newValue);
@@ -100,19 +91,64 @@ void DigitalDelayAudioProcessor::parameterChanged(const juce::String& parameter,
     }
     else if (parameter == getMsecParamName())
     {
-        msec = newValue;
+        /*
         DBG("msec changed");
+        if (boolVal != millisecondsActive)
+        {
+            millisecondsActive = boolVal;
+            stepsActive = !boolVal;
+            DBG("msec changed to: ");
+            if (millisecondsActive)
+                DBG("active");
+            else DBG("inactive");
+            DBG("steps changed to: ");
+            if (stepsActive)
+                DBG("active");
+            else DBG("inactive");
+            DBG("---------------------");
+        }
+        */
     }
     else if (parameter == getStepsParamName())
     {
-        steps = newValue;
-        convertStepsToMsec();
+        /*
         DBG("steps changed");
+        if (boolVal != stepsActive)
+        {
+            stepsActive = boolVal;
+            millisecondsActive = !boolVal;
+            convertStepsToMsec();
+            DBG("steps changed to: ");
+            if (stepsActive)
+                DBG("active");
+            else DBG("inactive");
+            DBG("msec changed to: ");
+            if (millisecondsActive)
+                DBG("active");
+            else DBG("inactive");
+            DBG("---------------------");
+        }
+        */
+    }
+    else if (parameter == getSixteenthNoteParamName())
+    {
+        /*
+        DBG("sixteenth changeD");
+        sixteenthNoteActive = newValue;
+        eighthTripletActive = !newValue;*/
+    }
+    else if (parameter == getEighthTripletParamName())
+    {
+        /*
+        DBG("trip changed");
+        eighthTripletActive = newValue;
+        sixteenthNoteActive = !newValue;*/
     }
 }
 
 void DigitalDelayAudioProcessor::convertStepsToMsec()
-{
+{ 
+    //milliseconds per minute * steps / (steps per beat * beats per minute
     if (isStepsActive())
     {
         if (isEighthTripletActive())
@@ -374,24 +410,63 @@ juce::AudioProcessorEditor* DigitalDelayAudioProcessor::createEditor()
 //==============================================================================
 void DigitalDelayAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
+    bool buttonStates[4] = { millisecondsActive, stepsActive, eighthTripletActive, sixteenthNoteActive };
     auto state = tree.copyState();
+    juce::XmlElement* xmlParent = new juce::XmlElement("parent");
+    juce::XmlElement* xmlSteps  = xmlParent->createNewChildElement(getStepsParamName());
+    juce::XmlElement* xmlMsec   = xmlParent->createNewChildElement(getMsecParamName());
+    juce::XmlElement* xmlButtons = xmlParent->createNewChildElement(juce::String("buttonids"));
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
-    copyXmlToBinary(*xml, destData);
+
+    xmlParent->addChildElement(xml.release());
+    xmlSteps->setAttribute(juce::String("stepsval"), steps);
+    xmlMsec->setAttribute(juce::String("msecval"), msec);
+    
+    for (int i = 0; i < 4; ++i)
+    {
+        xmlButtons->setAttribute(buttonIDs[i], buttonStates[i]);
+    }
+    
+    copyXmlToBinary(*xmlParent, destData);
+    
+    delete xmlParent;
 }
 
 void DigitalDelayAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
+    bool buttonStates[4] = {false, true, false, true}; //these are set to the original defaults for use in getBoolAttribute
     std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    juce::XmlElement* xmlTree = xmlState->getChildByName(tree.state.getType());
+    juce::XmlElement* xmlSteps = xmlState->getChildByName(getStepsParamName());
+    juce::XmlElement* xmlMsec = xmlState->getChildByName(getMsecParamName());
+    juce::XmlElement* xmlButtons = xmlState->getChildByName("buttonids");
 
     if (xmlState.get() != nullptr)
     {
-        if (xmlState->hasTagName(tree.state.getType()))
+        if (xmlTree->hasTagName(tree.state.getType()))
         {
-            tree.replaceState(juce::ValueTree::fromXml(*xmlState));
+            tree.replaceState(juce::ValueTree::fromXml(*xmlTree));
         }
+        if (xmlSteps->hasTagName(getStepsParamName()))
+        {
+            steps = xmlSteps->getIntAttribute(juce::String("stepsval"), 15);
+        }
+        if (xmlMsec->hasTagName(getMsecParamName()))
+        {
+            msec = xmlMsec->getIntAttribute(juce::String("msecval"), 130);
+        }
+        
+        if (xmlButtons->hasTagName(juce::String("buttonids")) && xmlButtons != nullptr)
+        {
+            for (int i = 0; i < 4; ++i)
+                buttonStates[i] = xmlButtons->getBoolAttribute(buttonIDs[i], buttonStates[i]);
+        }
+        setMillisecondsActive(buttonStates[0]);
+        setStepsActive(buttonStates[1]);
+        setEighthTripletActive(buttonStates[2]);
+        setSixteenthNoteActive(buttonStates[3]);
     }
-    if (tree.state.hasProperty(getStepsParamName()))
-        steps = tree.state.getProperty(getStepsParamName());
+    convertStepsToMsec();
 }
 
 //==============================================================================
@@ -421,13 +496,13 @@ juce::String DigitalDelayAudioProcessor::getStepsParamName()
 {
     return juce::String("Steps");
 }
-juce::String DigitalDelayAudioProcessor::getIncreaseParamName()
+juce::String DigitalDelayAudioProcessor::getSixteenthNoteParamName()
 {
-    return juce::String("Increase");
+    return juce::String("Sixteenth");
 }
-juce::String DigitalDelayAudioProcessor::getDecreaseParamName()
+juce::String DigitalDelayAudioProcessor::getEighthTripletParamName()
 {
-    return juce::String("Decrease");
+    return juce::String("EighthTriplet");
 }
 
 bool DigitalDelayAudioProcessor::isMillisecondsActive()

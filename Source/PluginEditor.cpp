@@ -74,6 +74,8 @@ DigitalDelayAudioProcessorEditor::DigitalDelayAudioProcessorEditor(DigitalDelayA
     eighthTripletButton.addListener(this);
     eighthTripletButton.setTooltip(juce::String("Set delay time in eighth note tripled steps. Disabled if time is being set in milliseconds."));
 
+    //createButtonAttachments();
+
     addAndMakeVisible(sixteenthNoteLabel);
     sixteenthNoteLabel.setText(juce::String("1/16"), juce::NotificationType::dontSendNotification);
     sixteenthNoteLabel.setJustificationType(juce::Justification::centredLeft);
@@ -128,7 +130,7 @@ void DigitalDelayAudioProcessorEditor::resized()
 {
     int sliderSide = 85;
     int buttonSide = 32; 
-    int buttonStartX = 230;
+    int buttonStartX = 220;
     int buttonStartY = 50;
     feedbackSlider.setBounds(380, 45, sliderSide, sliderSide);
     feedbackLabel.setBounds(380, 135, sliderSide, 12);
@@ -151,7 +153,7 @@ void DigitalDelayAudioProcessorEditor::resized()
     eighthTripletButton.setBounds(buttonStartX + 80, buttonStartY + buttonSide, buttonSide, buttonSide);
     eighthTripletLabel.setBounds(eighthTripletButton.getX() + eighthTripletButton.getWidth() / 2 + 5, eighthTripletButton.getY() + eighthTripletButton.getWidth() / 3, 60, 12);
     
-    display.setBounds(10, millisecondsButton.getY(), 150, 60);
+    display.setBounds(10, millisecondsButton.getY(), 130, 60);
     increaseButton.setBounds(display.getRight() + 10, display.getY(), 24, 24);
     decreaseButton.setBounds(display.getRight() + 10, display.getBottom() - 24, 24, 24);
 }
@@ -168,9 +170,13 @@ void DigitalDelayAudioProcessorEditor::createSliderAttachments()
 void DigitalDelayAudioProcessorEditor::createButtonAttachments()
 {
     buttonAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment
-    (audioProcessor.tree, audioProcessor.getStepsParamName(), increaseButton));
+    (audioProcessor.tree, audioProcessor.getSixteenthNoteParamName(), sixteenthNoteButton));
     buttonAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment
-    (audioProcessor.tree, audioProcessor.getStepsParamName(), decreaseButton));
+    (audioProcessor.tree, audioProcessor.getEighthTripletParamName(), eighthTripletButton));
+    buttonAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment
+    (audioProcessor.tree, audioProcessor.getStepsParamName(), stepsButton));
+    buttonAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment
+    (audioProcessor.tree, audioProcessor.getMsecParamName(), millisecondsButton));
 }
 
 void DigitalDelayAudioProcessorEditor::setTimeValFromText()
@@ -200,36 +206,56 @@ void DigitalDelayAudioProcessorEditor::setTimeValFromText()
 
 void DigitalDelayAudioProcessorEditor::buttonClicked(juce::Button* b)
 {
+    DBG("button clicked");
     if (b == &millisecondsButton && !audioProcessor.isMillisecondsActive())
     {
-        audioProcessor.setMillisecondsActive(true);
         millisecondsButton.setClickingTogglesState(false);
         audioProcessor.convertStepsToMsec();
+        audioProcessor.setStepsActive(false);
+        audioProcessor.setMillisecondsActive(true);
         display.setText(juce::String(audioProcessor.msec));
 
-        audioProcessor.setStepsActive(false);
         stepsButton.setClickingTogglesState(true);
         stepsButton.setToggleState(false, juce::NotificationType::dontSendNotification);
 
         eighthTripletButton.setEnabled(false);
         sixteenthNoteButton.setEnabled(false);
+
+        if (audioProcessor.isMillisecondsActive())
+            DBG("msec after active from buttonclicked->b==millisecondsButton");
+        else
+            DBG("msec after inactive from buttonclicked->b==millisecondsButton");
+        if (audioProcessor.isStepsActive())
+            DBG("steps after active from buttonclicked->b==millisecondsButton");
+        else
+            DBG("steps after inactive from buttonclicked->b==millisecondsButton");
     }
     else if (b == &stepsButton && !audioProcessor.isStepsActive())
     {
-        audioProcessor.setStepsActive(true);
         stepsButton.setClickingTogglesState(false);
         audioProcessor.convertStepsToMsec();
+        audioProcessor.setStepsActive(true);
+        audioProcessor.setMillisecondsActive(false);
         display.setText(juce::String(audioProcessor.steps));
         
-        audioProcessor.setMillisecondsActive(false);
         millisecondsButton.setClickingTogglesState(true);
         millisecondsButton.setToggleState(false, juce::NotificationType::dontSendNotification);
 
         eighthTripletButton.setEnabled(true);
         sixteenthNoteButton.setEnabled(true);
+
+        if (audioProcessor.isMillisecondsActive())
+            DBG("msec after active from buttonclicked->b==stepsButton");
+        else
+            DBG("msec after inactive from buttonclicked->b==stepsButton");
+        if (audioProcessor.isStepsActive())
+            DBG("steps after active from buttonclicked->b==stepsButton");
+        else
+            DBG("steps after inactive from buttonclicked->b==stepsButton");
     }
     else if (b == &sixteenthNoteButton && !audioProcessor.isSixteenthNoteActive())
     {
+        DBG("16th change editor");
         audioProcessor.setSixteenthNoteActive(true);
         audioProcessor.convertStepsToMsec();
         sixteenthNoteButton.setClickingTogglesState(false);
@@ -240,6 +266,7 @@ void DigitalDelayAudioProcessorEditor::buttonClicked(juce::Button* b)
     }
     else if (b == &eighthTripletButton && !audioProcessor.isEighthTripletActive())
     {
+        DBG("18 changed editor");
         audioProcessor.setEighthTripletActive(true);
         audioProcessor.convertStepsToMsec();
         eighthTripletButton.setClickingTogglesState(false);

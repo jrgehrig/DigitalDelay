@@ -59,8 +59,8 @@ public:
     juce::String getDryWetParamName(); 
     juce::String getMsecParamName();
     juce::String getStepsParamName();
-    juce::String getIncreaseParamName();
-    juce::String getDecreaseParamName();
+    juce::String getSixteenthNoteParamName();
+    juce::String getEighthTripletParamName();
 
     bool isMillisecondsActive();
     bool isStepsActive();
@@ -90,8 +90,7 @@ public:
         float startGain, float endGain,
         bool replacing);
 
-    //bool getCurrentPosition(CurrentPositionInfo& result) override;
-
+    //juce::ValueTree valueTree;
     juce::AudioProcessorValueTreeState tree;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void parameterChanged(const juce::String& parameter, float newValue) override;
@@ -100,12 +99,15 @@ public:
 
     int   msec;
     int   steps;
+    juce::Value steps2;
 private:
     juce::AudioBuffer<float> delayBuffer;
     int expectedReadPos{ -1 };
     juce::AudioBuffer<float> dryBuffer;
     juce::AudioPlayHead* playHead;
     juce::AudioPlayHead::CurrentPositionInfo sessionInfo;
+
+    juce::CachedValue<int> stepsCV;
 
     int writePosition { 0 };
     bool millisecondsActive  { false };
@@ -123,6 +125,8 @@ private:
     float pan; //can probably remove
     float panGains[2]{ 1.0f,1.0f };
     float lastPanGains[2]{ 1.0f,1.0f };
+
+    juce::StringArray buttonIDs;
 
     float tempo{ 120 };
     
